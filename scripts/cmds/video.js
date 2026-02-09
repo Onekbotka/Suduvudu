@@ -1,142 +1,78 @@
-const A = require("axios");
-const B = require("fs");
-const C = require("path");
-const D = require("yt-search");
-const E = require("node-fetch");
-
-const F = "https://raw.githubusercontent.com/aryannix/stuffs/master/raw/apis.json";
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
 module.exports = {
-  config: {
-    name: "video",
-    aliases: ["v"],
-    version: "0.0.1",
-    author: "ArYAN",
-    countDown: 5,
-    role: 0,
-    shortDescription: "Download YouTube video interactively.",
-    longDescription: "Search YouTube, display a list of 6 videos, and download the selected one.",
-    category: "MUSIC",
-    guide: "/video [video name]"
-  },
+config: {
+name: "video",
+version: "2.2.0",
+author: "milon",
+countDown: 5,
+role: 0,
+shortDescription: "Get YouTube video by name (No Prefix)",
+longDescription: "Search and download YouTube videos by name without any prefix",
+category: "media",
+guide: {
+en: "video <name>"
+}
+},
 
-  onStart: async function ({ api, event, args }) {
-    if (!args.length)
-      return api.sendMessage("❌ Missing video name.", event.threadID, event.messageID);
+// এই ফাংশনটি প্রিফিক্স ছাড়া কাজ করতে সাহায্য করবে
+onChat: async function ({ api, event, message }) {
+const { body, threadID, messageID } = event;
+if (!body || !body.toLowerCase().startsWith("video ")) return;
 
-    const G = args.join(" ");
-    
-    try {
-      const H = await D(G);
-      if (!H || !H.videos.length) throw new Error("No video.");
+const args = body.split(/\s+/);
+args.shift(); // 'video' লেখাটি বাদ দিয়ে বাকিটা কুয়েরি হিসেবে নিবে
+const query = args.join(" ");
 
-      const I = H.videos.slice(0, 6); 
-      
-      let J = "🔎 Found 6 videos. Reply with the number to download:\n\n";
-      const K = [];
-      const L = []; 
+if (!query) return;
 
-      for (let i = 0; i < I.length; i++) {
-        const M = I[i];
-        
-        const N = await A.get(M.thumbnail, { responseType: 'stream' });
-        L.push(N.data);
-        
-        const O = M.views.toLocaleString();
-        
-        J += `${i + 1}. ${M.title}\nTime: ${M.timestamp}\nChannel: ${M.author.name}\nViews: ${O}\n\n`;
-        
-        K.push({ 
-            title: M.title,
-            url: M.url,
-            channel: M.author.name,
-            views: O
-        });
-      }
+let loadingMsgID = null;
 
-      const P = await api.sendMessage(
-        { body: J, attachment: L },
-        event.threadID
-      );
-      
-      global.GoatBot.onReply.set(P.messageID, {
-        commandName: this.config.name,
-        author: event.senderID,
-        videos: K,
-        listMessageID: P.messageID 
-      });
+try {
+const loading = await api.sendMessage(`🔎 Searching for "${query}"...\n⏳ Please wait...`, threadID);
+loadingMsgID = loading.messageID;
 
-    } catch (err) {
-      let Q = err.message.includes("No video") ? "No video found." : "Search error.";
-      api.sendMessage(`❌ Error: ${Q}`, event.threadID, event.messageID);
-    }
-  },
-  
-  onReply: async function({ api, event, Reply }) {
-    if (event.senderID !== Reply.author) return;
+const searchRes = await axios.get(`https://betadash-search-download.vercel.app/yt?search=${encodeURIComponent(query)}`);
+const video = searchRes.data[0];
 
-    if (Reply.listMessageID) {
-        api.unsendMessage(Reply.listMessageID);
-    }
-    
-    global.GoatBot.onReply.delete(event.messageReply.messageID);
+if (!video || !video.url) throw new Error("No video found.");
 
+try { await api.unsendMessage(loadingMsgID); } catch(e) {}
 
-    const R = parseInt(event.body.trim());
-    if (isNaN(R) || R < 1 || R > Reply.videos.length) {
-      return api.sendMessage("❌ Invalid selection. Choose 1-6.", event.threadID, event.messageID);
-    }
-    
-    const S = Reply.videos[R - 1];
-    const T = S.url;
-    
-    let U;
-    try {
-      const V = await A.get(F);
-      U = V.data && V.data.nixtube; 
-      if (!U) throw new Error("Config error.");
-    } catch (error) {
-      return api.sendMessage("❌ Config fetch error.", event.threadID, event.messageID);
-    }
-    
-    try {
-      const W = `${U}?url=${encodeURIComponent(T)}&type=video`;
-      
-      const X = await A.get(W);
+const downloading = await api.sendMessage(`🎬 Found: ${video.title}\n⬇️ Downloading now...`, threadID);
+loadingMsgID = downloading.messageID;
 
-      if (!X.data.status || !X.data.downloadUrl) {
-          throw new Error("Link fetch error.");
-      }
-      
-      const Y = X.data.downloadUrl;
+const dlRes = await axios.get(`https://yt-api-imran.vercel.app/api?url=${video.url}`);
+const downloadUrl = dlRes.data.downloadUrl;
+if (!downloadUrl) throw new Error("No download link received.");
 
-      const Z = await E(Y);
-      if (!Z.ok) throw new Error("Download failed.");
+const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+const cachePath = path.join(__dirname, "cache");
+await fs.ensureDir(cachePath);
+const filePath = path.join(cachePath, `video_${Date.now()}.mp4`);
+await fs.writeFile(filePath, videoBuffer);
 
-      const a = await Z.buffer();
-      const b = `${S.title}.mp4`.replace(/[\/\\:*?"<>|]/g, "").substring(0, 100); 
-      const c = C.join(__dirname, b);
+const finalMessage = {
+body: `━━━━━━━━━━━━━━━━━━\n🎬 𝗧𝗶𝘁𝗹𝗲: ${video.title}\n⏱️ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: ${video.time}\n━━━━━━━━━━━━━━━━━━\n\n✅ Your video is ready!`,
+attachment: fs.createReadStream(filePath)
+};
 
-      B.writeFileSync(c, a);
-      
-      const d = `• Title: ${S.title}\n• Channel Name: ${S.channel}\n• Quality: ${X.data.quality || 'N/A'}\n• Views: ${S.views || 'N/A'}`;
+await api.sendMessage(finalMessage, threadID, async () => {
+if (fs.existsSync(filePath)) await fs.unlinkSync(filePath);
+}, messageID);
 
+if (loadingMsgID) await api.unsendMessage(loadingMsgID);
 
-      await api.sendMessage(
-        { 
-          body: d,
-          attachment: B.createReadStream(c) 
-        },
-        event.threadID,
-        () => {
-          B.unlinkSync(c);
-        },
-        event.messageID
-      );
+} catch (err) {
+if (loadingMsgID) try { await api.unsendMessage(loadingMsgID); } catch (e) {}
+api.sendMessage(`❌ Error: ${err.message || "Something went wrong!"}`, threadID, messageID);
+}
+},
 
-    } catch (err) {
-      let e = err.message.includes("Link fetch error") || err.message.includes("Download failed") ? err.message : "Download error.";
-      api.sendMessage(`❌ Error: ${e}`, event.threadID, event.messageID);
-    }
-  }
+// এটি খালি রাখা হয়েছে যাতে help লিস্টে কমান্ডটি দেখায়
+onStart: async function ({ api, event }) {
+api.sendMessage("অনুগ্রহ করে 'video <নাম>' এভাবে লিখে ভিডিও সার্চ করুন (কোনো প্রিফিক্স লাগবে না)।", event.threadID, event.messageID);
+}
 };
