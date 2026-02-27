@@ -5,8 +5,8 @@ const { loadImage, createCanvas } = require("canvas");
 
 module.exports = {
   config: {
-    name: "kiss2",
-    aliases: ["kiss2"],
+    name: "kissgirl",
+    aliases: ["kissg"],
     version: "1.5",
     author: "Amit Max ⚡",
     countDown: 5,
@@ -18,6 +18,20 @@ module.exports = {
   },
 
   onStart: async function ({ event, api, usersData }) {
+       const senderData = await usersData.get(event.senderID);
+
+if (!senderData || senderData.money < 500) {
+  return api.sendMessage(
+    "Oy Goribs Cmd use er jonno 500tk lagbe 😾",
+    event.threadID,
+    event.messageID
+  );
+}
+
+// Deduct 500 money
+await usersData.set(event.senderID, {
+  money: senderData.money - 500
+});
     let mention = Object.keys(event.mentions)[0];
     let targetID = mention || event.messageReply?.senderID;
 
