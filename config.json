@@ -12,8 +12,8 @@
   "antiInbox": false,
   "language": "en",
   "notesLanguage": "change to your language with ISO 639-1 code, available languages: vi (Vietnamese), en (English)",
-  "nickNameBot": "♡┋ 𝗛𝗶𝗻𝗮𝘁𝗮 ᥫ᭡😫✨",
-  "prefix": ".",
+  "nickNameBot": "KoSu",
+  "prefix": "/",
   "api": "https://api.noobs-api.rf.gd/dipto",
   "approval": false,
   "reactBy": {
@@ -32,7 +32,7 @@
     "ignoreCommand": []
   },
   "adminBot": [
-    "100079230918828",
+    "61582469925540",
     "100082172232909",
     "100079230918828",
     "100079230918828",
